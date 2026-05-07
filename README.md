@@ -89,5 +89,3 @@ This script randomly samples the dataset, performs a forward pass using the trai
 ```bash
 python inference_unet_final.py
 ```
-
-¡Muchísimo éxito grabando el video! Tienes un proyecto sobresaliente entre manos.
