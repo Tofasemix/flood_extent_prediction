@@ -1,0 +1,58 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Weights and Models
+# Exclude all .pth files to prevent GitHub 100MB limit errors
+*.pth
+
+# EXCEPTIONS (Critical Project Files requested to be included)
+!MyUnet/multimodal_flood_unet.pth
+# Note: Deeplab's final model was >100MB, so we zipped it and include the zip instead.
+!Deeplab/multimodal_deeplab_v3_final.pth.zip
