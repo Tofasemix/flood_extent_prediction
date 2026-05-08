@@ -1,6 +1,6 @@
 # Multimodal Flood Susceptibility Prediction: Fusing 1D Atmospheric and 2D Topographic Data
 
-This repository contains the source code and experimental framework for a doctoral-level research project on multimodal computer vision. The primary hypothesis explores the injection of 1D atmospheric tabular data (pressure, wind velocity) into the latent space of 2D Convolutional Neural Networks (CNNs) conditioning spatial predictions of flood susceptibility.
+This repository contains the source code and experimental framework for a doctoral-level research project on multimodal computer vision. The primary hypothesis explores the injection of 1D atmospheric tabular data (pressure, wind velocity) during typhoons into the latent space of 2D Convolutional Neural Networks (CNNs) conditioning spatial predictions of flood susceptibility.
 
 ## Project Overview
 Traditional flood prediction models often isolate satellite imagery from tabular atmospheric data. This project bridges that gap by fusing spatial topography/precipitation maps with physical tabular data inside the bottleneck of deep learning architectures. 
