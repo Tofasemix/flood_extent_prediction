@@ -11,10 +11,10 @@ The repository evaluates two distinct approaches:
 
 ### Architectural Approaches
 **1. Multimodal U-Net**
-![U-Net Architecture](unet_architecture.png)
+![U-Net Architecture](MyUnet.png)
 
 **2. Multimodal DeepLabV3+**
-![DeepLab Architecture](deeplab_architecture.png)
+![DeepLab Architecture](DeepLab.png)
 
 ## Environment Setup & Hardware
 
