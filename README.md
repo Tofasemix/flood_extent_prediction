@@ -9,7 +9,7 @@ The repository evaluates two distinct approaches:
 1. **Multimodal U-Net (Baseline):** Utilizes standard skip connections for precise pixel-to-pixel spatial reconstruction.
 2. **Multimodal DeepLabV3+:** Employs Atrous Spatial Pyramid Pooling (ASPP) to capture broader global context via dilated convolutions.
 
-## ⚙️ Environment Setup & Hardware
+## Environment Setup & Hardware
 
 The models were developed and trained using an NVIDIA RTX 4500 Ada Generation GPU, but inference can be executed on lower-tier hardware. To ensure complete reproducibility, the environment configuration is provided in two formats.
 
