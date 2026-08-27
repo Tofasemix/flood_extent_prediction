@@ -1,0 +1,34 @@
+{
+    "source_csv": "clean_tabular_data.csv",
+    "source_csv_sha256": "cf9ad27831528b55182719d2c38f96a309bf89c041c8178071c007b4d2038740",
+    "random_seed": 42,
+    "stratification_target": "flood_positive",
+    "flood_positive_definition": "any pixel > 0 in FLOOD_<name_date>.png",
+    "split_sizes": {
+        "train": 117,
+        "val": 25,
+        "test": 25
+    },
+    "counts": {
+        "full": {
+            "total": 167,
+            "flood_positive": 150,
+            "dry": 17
+        },
+        "train": {
+            "total": 117,
+            "flood_positive": 105,
+            "dry": 12
+        },
+        "val": {
+            "total": 25,
+            "flood_positive": 23,
+            "dry": 2
+        },
+        "test": {
+            "total": 25,
+            "flood_positive": 22,
+            "dry": 3
+        }
+    }
+}

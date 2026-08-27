@@ -39,7 +39,7 @@ def train_model():
     log_path = Path(__file__).resolve().parent / "unet_training_logs.csv"
     with open(log_path, mode='w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(['epoch', 'loss', 'lr']) # Encabezados del CSV
+        writer.writerow(['epoch', 'train_loss', 'val_loss', 'lr'])
     print(f"Los logs de entrenamiento se guardarán automáticamente en: {log_path}")
 
     # --- CONFIGURACIÓN EXPLÍCITA DEL EXPERIMENTO ---
@@ -68,14 +68,61 @@ def train_model():
         json.dump(run_config, f, indent=4)
     print(f"  Run config saved to   : {config_path}\n")
 
-    # 2. Load Data
-    dataset = CycloneFloodDataset(
-        csv_file=str(ROOT_DIR / 'clean_tabular_data.csv'), 
-        img_dir=str(ROOT_DIR / 'Dataset/'), 
-        transform=get_training_augmentation()
+    # 2. Load Train / Validation Data
+    train_csv = ROOT_DIR / "splits" / "train.csv"
+    val_csv = ROOT_DIR / "splits" / "val.csv"
+
+    train_dataset = CycloneFloodDataset(
+        csv_file=str(train_csv),
+        img_dir=str(ROOT_DIR / "Dataset"),
+        transform=get_training_augmentation(),
     )
-    
-    train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
+
+    # Fit normalization statistics ONLY on the training split.
+    train_mean, train_std = train_dataset.get_tabular_stats()
+
+    val_dataset = CycloneFloodDataset(
+        csv_file=str(val_csv),
+        img_dir=str(ROOT_DIR / "Dataset"),
+        transform=None,
+        tabular_mean=train_mean,
+        tabular_std=train_std,
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=4,
+    )
+
+    print(f"Training samples   : {len(train_dataset)}")
+    print(f"Validation samples : {len(val_dataset)}")
+    print(f"Tabular feature order: {train_dataset.tabular_cols}")
+    print(f"Train tabular mean : {train_mean}")
+    print(f"Train tabular std  : {train_std}")
+
+    # Add the exact split/normalization protocol to the run config.
+    run_config.update({
+        "train_csv": str(train_csv.relative_to(ROOT_DIR)),
+        "val_csv": str(val_csv.relative_to(ROOT_DIR)),
+        "train_samples": len(train_dataset),
+        "val_samples": len(val_dataset),
+        "tabular_feature_order": train_dataset.tabular_cols,
+        "tabular_mean": train_mean.tolist(),
+        "tabular_std": train_std.tolist(),
+        "normalization_fit_split": "train",
+    })
+
+    with open(config_path, "w") as f:
+        json.dump(run_config, f, indent=4)
 
     # 3. Initialize Model
     model = MultimodalFloodModel(
@@ -96,18 +143,30 @@ def train_model():
     optimizer = optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
 
-    # 5. The Training Loop
-    print(f"Starting training for {epochs} epochs on {len(dataset)} cyclones...")
-    
+    # 5. Training / Validation Loop
+    print(
+        f"Starting training for {epochs} epochs "
+        f"on {len(train_dataset)} training cyclones..."
+    )
+
+    best_val_loss = float("inf")
+    best_epoch = 0
+    save_path = (
+        Path(__file__).resolve().parent
+        / "multimodal_flood_unet_best_split.pth"
+    )
+
     for epoch in range(epochs):
+        # -------------------------
+        # Training phase
+        # -------------------------
         model.train()
-        epoch_loss = 0.0
-        
-        for batch_idx, (spatial_inputs, tabular_inputs, flood_masks) in enumerate(train_loader):
+        train_loss_sum = 0.0
+
+        for spatial_inputs, tabular_inputs, flood_masks in train_loader:
             spatial_inputs = spatial_inputs.to(device)
             tabular_inputs = tabular_inputs.to(device)
-            
-            # Protección Dimensional para el BCE Loss
+
             flood_masks = flood_masks.to(device)
             if len(flood_masks.shape) == 3:
                 flood_masks = flood_masks.unsqueeze(1)
@@ -119,25 +178,79 @@ def train_model():
             loss.backward()
             optimizer.step()
 
-            epoch_loss += loss.item()
+            train_loss_sum += loss.item()
 
-        # Extraer métricas de la época
-        avg_loss = epoch_loss / len(train_loader)
+        avg_train_loss = train_loss_sum / len(train_loader)
+
+        # -------------------------
+        # Validation phase
+        # -------------------------
+        model.eval()
+        val_loss_sum = 0.0
+
+        with torch.no_grad():
+            for spatial_inputs, tabular_inputs, flood_masks in val_loader:
+                spatial_inputs = spatial_inputs.to(device)
+                tabular_inputs = tabular_inputs.to(device)
+
+                flood_masks = flood_masks.to(device)
+                if len(flood_masks.shape) == 3:
+                    flood_masks = flood_masks.unsqueeze(1)
+
+                predictions = model(spatial_inputs, tabular_inputs)
+                val_loss = combined_loss(predictions, flood_masks)
+                val_loss_sum += val_loss.item()
+
+        avg_val_loss = val_loss_sum / len(val_loader)
         current_lr = optimizer.param_groups[0]['lr']
-        
-        print(f"Epoch [{epoch+1}/{epochs}] - Loss: {avg_loss:.4f} | LR: {current_lr:.6f}")
-        
-        # Guardar silenciosamente en el CSV
+
+        print(
+            f"Epoch [{epoch + 1}/{epochs}] - "
+            f"Train Loss: {avg_train_loss:.4f} | "
+            f"Val Loss: {avg_val_loss:.4f} | "
+            f"LR: {current_lr:.6f}"
+        )
+
+        # Save epoch metrics.
         with open(log_path, mode='a', newline='') as f:
             writer = csv.writer(f)
-            writer.writerow([epoch+1, avg_loss, current_lr])
-        
-        scheduler.step(avg_loss)
+            writer.writerow([
+                epoch + 1,
+                avg_train_loss,
+                avg_val_loss,
+                current_lr,
+            ])
 
-    print("\nTraining complete! Saving model weights...")
-    save_path = str(Path(__file__).resolve().parent / "multimodal_flood_unet.pth")
-    torch.save(model.state_dict(), save_path)
-    print(f"Model saved exactly at: {save_path}")
+        # Scheduler is driven by held-out validation loss.
+        scheduler.step(avg_val_loss)
+
+        # Keep only the best validation checkpoint.
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            best_epoch = epoch + 1
+            torch.save(model.state_dict(), save_path)
+
+            print(
+                f"  -> New best validation checkpoint "
+                f"(epoch {best_epoch}, val_loss={best_val_loss:.4f})"
+            )
+
+    # Record final model-selection information.
+    run_config.update({
+        "model_selection_metric": "validation_loss",
+        "best_epoch": best_epoch,
+        "best_val_loss": best_val_loss,
+        "checkpoint": save_path.name,
+    })
+
+    with open(config_path, "w") as f:
+        json.dump(run_config, f, indent=4)
+
+    print("\nTraining complete.")
+    print(f"Best epoch          : {best_epoch}")
+    print(f"Best validation loss: {best_val_loss:.6f}")
+    print(f"Best checkpoint     : {save_path}")
+
 
 if __name__ == "__main__":
     train_model()
