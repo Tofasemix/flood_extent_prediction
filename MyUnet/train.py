@@ -5,6 +5,7 @@ import segmentation_models_pytorch as smp
 import albumentations as A
 import sys
 import csv
+import json
 from pathlib import Path
 
 # --- RESOLUCIÓN DINÁMICA DE RUTAS ---
@@ -32,6 +33,7 @@ def train_model():
     epochs = 150
     batch_size = 16  
     learning_rate = 1e-4
+    encoder_weights = "imagenet"
 
     # --- CONFIGURACIÓN DEL LOGGER ---
     log_path = Path(__file__).resolve().parent / "unet_training_logs.csv"
@@ -39,6 +41,32 @@ def train_model():
         writer = csv.writer(f)
         writer.writerow(['epoch', 'loss', 'lr']) # Encabezados del CSV
     print(f"Los logs de entrenamiento se guardarán automáticamente en: {log_path}")
+
+    # --- CONFIGURACIÓN EXPLÍCITA DEL EXPERIMENTO ---
+    print("\nConfiguración del experimento:")
+    print("  Architecture          : Multimodal U-Net")
+    print("  Encoder               : ResNet-34")
+    print(f"  Encoder initialization: {encoder_weights}")
+    print("  Spatial channels      : 2")
+    print("  Tabular features      : 3")
+
+    run_config = {
+        "architecture": "Multimodal U-Net",
+        "encoder": "resnet34",
+        "encoder_weights": encoder_weights,
+        "spatial_channels": 2,
+        "tabular_dim": 3,
+        "bottleneck_dim": 512,
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "learning_rate": learning_rate,
+        "weight_decay": 1e-4,
+    }
+
+    config_path = Path(__file__).resolve().parent / "unet_run_config.json"
+    with open(config_path, "w") as f:
+        json.dump(run_config, f, indent=4)
+    print(f"  Run config saved to   : {config_path}\n")
 
     # 2. Load Data
     dataset = CycloneFloodDataset(
@@ -50,7 +78,11 @@ def train_model():
     train_loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4)
 
     # 3. Initialize Model
-    model = MultimodalFloodModel(tabular_dim=3, bottleneck_dim=512).to(device)
+    model = MultimodalFloodModel(
+        tabular_dim=3,
+        bottleneck_dim=512,
+        encoder_weights=encoder_weights,
+    ).to(device)
 
     # 4. Define Specialized Loss and Optimizer
     dice_loss = smp.losses.DiceLoss(smp.losses.BINARY_MODE, from_logits=True)

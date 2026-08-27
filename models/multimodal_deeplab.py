@@ -65,13 +65,66 @@ class ASPP_Multimodal(nn.Module):
         return self.project(concatenated)
 
 class MultimodalDeepLabV3Plus(nn.Module):
-    def __init__(self, spatial_channels=2, tabular_dim=3, num_classes=1):
+    def __init__(
+        self,
+        spatial_channels=2,
+        tabular_dim=3,
+        num_classes=1,
+        encoder_weights=None,
+    ):
         super().__init__()
-        
+
+        if encoder_weights not in (None, "imagenet"):
+            raise ValueError(
+                "encoder_weights must be either None (random initialization) "
+                "or 'imagenet' (ImageNet-pretrained ResNet-34)."
+            )
+
         # 1. Backbone (ResNet34)
-        # Modificamos la primera capa para aceptar tu topografía+lluvia (2 canales en vez de RGB)
-        resnet = models.resnet34(weights=None)
-        self.stem = nn.Conv2d(spatial_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # Keep None as the legacy/random initialization option, while allowing
+        # an ImageNet-pretrained backbone for a controlled U-Net comparison.
+        torchvision_weights = (
+            models.ResNet34_Weights.DEFAULT
+            if encoder_weights == "imagenet"
+            else None
+        )
+        resnet = models.resnet34(weights=torchvision_weights)
+
+        # The project uses two spatial channels (topography + precipitation).
+        # When ImageNet weights are requested, adapt the pretrained RGB stem
+        # using the same channel-reuse/scaling rule used by
+        # segmentation_models_pytorch for non-RGB pretrained inputs.
+        self.stem = nn.Conv2d(
+            spatial_channels,
+            64,
+            kernel_size=7,
+            stride=2,
+            padding=3,
+            bias=False,
+        )
+        if encoder_weights == "imagenet":
+            with torch.no_grad():
+                pretrained_weight = resnet.conv1.weight
+
+                if spatial_channels == 1:
+                    adapted_weight = pretrained_weight.sum(dim=1, keepdim=True)
+                else:
+                    adapted_weight = torch.empty(
+                        pretrained_weight.shape[0],
+                        spatial_channels,
+                        *pretrained_weight.shape[2:],
+                        dtype=pretrained_weight.dtype,
+                        device=pretrained_weight.device,
+                    )
+                    for channel_idx in range(spatial_channels):
+                        adapted_weight[:, channel_idx] = (
+                            pretrained_weight[:, channel_idx % 3]
+                        )
+                    adapted_weight *= 3.0 / spatial_channels
+
+                self.stem.weight.copy_(adapted_weight)
+
+        self.encoder_weights = encoder_weights
         self.bn1 = resnet.bn1
         self.relu = resnet.relu
         self.maxpool = resnet.maxpool

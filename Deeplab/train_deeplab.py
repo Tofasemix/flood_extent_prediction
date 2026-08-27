@@ -7,6 +7,7 @@ import albumentations as A
 from torch.utils.data import DataLoader
 import sys
 import csv
+import json
 from pathlib import Path
 
 # Configurar rutas de forma dinámica
@@ -16,6 +17,9 @@ sys.path.append(str(ROOT_DIR))
 # Importamos la arquitectura y el dataset
 from utils.data_loader import CycloneFloodDataset
 from models.multimodal_deeplab import MultimodalDeepLabV3Plus
+
+# Research configuration: keep this explicit for reproducible comparisons.
+ENCODER_WEIGHTS = "imagenet"  # Use None to reproduce the legacy random-initialization DeepLab run.
 
 # 1. Definición de la Boundary Loss (Pérdida de Contorno)
 class EdgeBoundaryLoss(nn.Module):
@@ -45,7 +49,40 @@ def train_deeplab():
     print(f"Entrenando DeepLabV3+ Multimodal en: {device}")
 
     # 3. Inicializar Modelo
-    model = MultimodalDeepLabV3Plus(spatial_channels=2, tabular_dim=3, num_classes=1).to(device)
+    # Controlled comparison: explicitly use the same ImageNet-pretrained ResNet-34
+    # initialization family as the U-Net. Set ENCODER_WEIGHTS = None only when
+    # intentionally reproducing the legacy random-initialization DeepLab run.
+    model = MultimodalDeepLabV3Plus(
+        spatial_channels=2,
+        tabular_dim=3,
+        num_classes=1,
+        encoder_weights=ENCODER_WEIGHTS,
+    ).to(device)
+
+    encoder_init_label = "ImageNet" if ENCODER_WEIGHTS == "imagenet" else "Random"
+    print("\n" + "=" * 60)
+    print("CONFIGURACIÓN DEL EXPERIMENTO")
+    print("=" * 60)
+    print("Arquitectura              : Multimodal DeepLabV3+")
+    print("Encoder                    : ResNet-34")
+    print(f"Inicialización del encoder : {encoder_init_label}")
+    print("Canales espaciales         : 2")
+    print("Variables tabulares        : 3")
+    print("=" * 60 + "\n")
+
+    # Persist the initialization choice next to the training log.
+    run_config_path = Path(__file__).resolve().parent / "deeplab_run_config.json"
+    run_config = {
+        "architecture": "MultimodalDeepLabV3+",
+        "encoder": "resnet34",
+        "encoder_weights": ENCODER_WEIGHTS,
+        "spatial_channels": 2,
+        "tabular_dim": 3,
+        "num_classes": 1,
+    }
+    with open(run_config_path, mode="w", encoding="utf-8") as f:
+        json.dump(run_config, f, indent=2)
+    print(f"Configuración del experimento guardada en: {run_config_path}")
 
     # --- CONFIGURACIÓN DEL LOGGER CSV ---
     log_path = Path(__file__).resolve().parent / "deeplab_training_logs.csv"

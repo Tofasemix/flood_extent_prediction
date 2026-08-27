@@ -3,15 +3,23 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 
 class MultimodalFloodModel(nn.Module):
-    def __init__(self, tabular_dim=3, bottleneck_dim=512):
+    def __init__(self, tabular_dim=3, bottleneck_dim=512, encoder_weights="imagenet"):
         super(MultimodalFloodModel, self).__init__()
+
+        if encoder_weights not in ("imagenet", None):
+            raise ValueError(
+                "encoder_weights must be either 'imagenet' or None. "
+                f"Received: {encoder_weights!r}"
+            )
+
+        self.encoder_weights = encoder_weights
         
         # 1. Visual Backbone (Spatial Data)
         # in_channels=2 specifically for the stacked TP36 and SLOPE images.
         # We use a ResNet34 encoder; it is lightweight, fast, and highly effective.
         self.unet = smp.Unet(
             encoder_name="resnet34", 
-            encoder_weights="imagenet", 
+            encoder_weights=encoder_weights, 
             in_channels=2, 
             classes=1 # Outputting a single binarized flood mask
         )

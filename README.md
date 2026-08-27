@@ -66,6 +66,40 @@ A significant challenge in flood prediction is extreme class imbalance (approx. 
 * **Focal Loss (DeepLab only):** Penalizes false confidence in easy-to-predict "dry" pixels.
 * **Boundary Loss (DeepLab only):** Refines topographic contour precision using morphological simulated operations.
 
+## Experimental Protocol Status
+
+### Legacy / Preliminary Comparison
+
+The currently reported U-Net and DeepLabV3+ results below were produced before the
+encoder-initialization protocol was fully controlled across architectures.
+
+- **Multimodal U-Net:** ResNet-34 encoder initialized with ImageNet weights.
+- **Multimodal DeepLabV3+:** ResNet-34 encoder initialized from random weights.
+
+Because encoder initialization differed between the two architectures, the legacy
+comparison should **not** be interpreted as an architecture-isolated test of
+U-Net skip connections versus DeepLabV3+ ASPP alone. The reported values are retained
+for reproducibility and historical reference.
+
+### Controlled Comparison Protocol
+
+For future architecture comparisons, both models now expose encoder initialization
+explicitly. The primary controlled experiment will use:
+
+| Model | Encoder | Initialization | Spatial Inputs | Tabular Inputs |
+| :--- | :--- | :--- | :--- | :--- |
+| Multimodal U-Net | ResNet-34 | ImageNet | 2 channels | 3 variables |
+| Multimodal DeepLabV3+ | ResNet-34 | ImageNet | 2 channels | 3 variables |
+
+This removes encoder pretraining as a confounding factor when comparing the two
+architectures. Random-initialization modes remain available for secondary ablation
+experiments and for reproducing the legacy DeepLab configuration.
+
+> **Important:** The controlled models have not yet been retrained under the final
+> research evaluation protocol. The metrics reported in the next section therefore
+> remain the legacy/preliminary results and should not be presented as the outcome of
+> the controlled comparison.
+
 ## Results & Quantitative Evaluation
 
 After rigorous training and ablation studies, the evaluation on a set of 150 regional cyclones yielded the following metrics (evaluated on 64x64 spatial patches):
